@@ -2,6 +2,20 @@
 
 Aynı wifi üzerinde oynanan, Türkçe Cards Against Humanity benzeri parti oyunu. Oyun TV'ye yansıtılır, oyuncular telefonlarından katılır. Bağımlılık yok, sadece Node.js yeterli.
 
+## Ekran görüntüleri
+
+**TV: lobi.** Oyuncular QR kodu okutarak katılır.
+
+<img src="screenshots/tv-lobi.png" width="640">
+
+**Telefon: kart seçimi ve oylama**
+
+<img src="screenshots/telefon-kart-secimi.png" width="240"> <img src="screenshots/telefon-oylama.png" width="240">
+
+**TV: tur sonucu.** En çok oy alan ilk 3 kart 3 / 2 / 1 puan alır.
+
+<img src="screenshots/tv-sonuc.png" width="640">
+
 ## Çalıştırma
 
 ```
