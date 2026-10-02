@@ -1,0 +1,79 @@
+<!doctype html><html lang=tr><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
+<title>Kartlar</title>
+<style>
+body{margin:0;padding:14px;font:18px system-ui;background:#161616;color:#fff}
+body.tv{font-size:30px;padding:30px}
+.card{background:#fff;color:#111;border-radius:12px;padding:16px;margin:10px 0;font-weight:600}
+.card.black{background:#000;color:#fff;border:2px solid #fff;font-size:1.2em}
+.card.mine{opacity:.4}.card.win{outline:4px solid gold}.card.sel{outline:4px solid #4c8}
+.card small{display:block;color:#666;font-weight:400;margin-top:6px}
+.qr{background:#fff;padding:10px;border-radius:12px;width:min(60vw,60vh,360px)}.qr svg{display:block;width:100%}
+.board{display:flex;flex-wrap:wrap;gap:8px;margin-top:20px}
+.pl{background:#333;border-radius:20px;padding:4px 12px}.pl.off{opacity:.4}.pl.done{background:#276}
+button,input{font:inherit;padding:12px;border-radius:10px;border:0;margin:4px}
+button{background:#4c8;color:#000;font-weight:700}
+</style>
+<div id=app></div>
+<div id=ctl></div>
+<script src=/qr.js></script>
+<script>
+const role = location.pathname.slice(1) || 'play';
+const $ = document.getElementById('app');
+let id = localStorage.id || '', pin = sessionStorage.pin || '', es, st;
+document.body.className = role;
+const esc = s => String(s).replace(/[&<>"']/g, c => '&#' + c.charCodeAt() + ';');
+const post = b => fetch('/act', { method: 'POST', body: JSON.stringify(b) }).then(r => r.json());
+
+function connect() {
+  if (es) es.close();
+  es = new EventSource('/events?id=' + id);
+  es.onmessage = e => { st = JSON.parse(e.data); draw(); };
+}
+async function join() {
+  const r = await post({ action: 'join', name: document.getElementById('nm').value });
+  if (r.error) return alert(r.error);
+  id = localStorage.id = r.id; connect();
+}
+async function act(action, i) {
+  const r = await post({ id, action, i, pin });
+  if (r.error) alert(r.error);
+}
+
+function draw() {
+  const s = st, me = s.me, watch = role !== 'play', P = s.players, n = P.filter(p => p.on).length;
+  if (!watch && !me) { // join form; don't redraw while typing
+    if (!$.querySelector('#nm')) $.innerHTML = '<h1>Katıl</h1><input id=nm maxlength=16 placeholder="İsmin"><button onclick=join()>Gir</button>';
+    return;
+  }
+  const qr = u => { const q = qrcode(0, 'M'); q.addData(u); q.make(); return '<div class=qr>' + q.createSvgTag({ scalable: true, margin: 2 }) + '</div>'; };
+  const card = (t, cls = '', extra = '', click = '') =>
+    `<div class="card ${cls}" ${click ? `onclick="${click}"` : ''}>${esc(t)}${extra}</div>`;
+  let h = s.round ? `<div>Tur ${s.round}/${s.rounds}</div>` : '';
+  if (s.phase === 'lobby') h += '<h1>Kartlar</h1>' + (watch ? qr(s.url) + `<p>Telefonla tara: <b>${esc(s.url)}</b></p>` : '<p>Başlaması bekleniyor…</p>');
+  else if (s.phase === 'end') h += '<h1>Oyun bitti 🏆</h1>';
+  else {
+    h += `<div class="card black">${esc(s.black).replace('___', '_____')}</div>`;
+    if (s.phase === 'pick')
+      h += watch ? `<p>${P.filter(p => p.done).length}/${n} kişi seçti</p>`
+        : me.picked ? card(me.picked, 'sel') + '<p>Diğerleri bekleniyor…</p>'
+        : me.hand.map((c, i) => card(c, '', '', `act('pick',${i})`)).join('');
+    else if (s.phase === 'vote')
+      h += (watch ? '' : `<p>${me.voted ? 'Oyun verildi, bekle…' : 'En iyisine oy ver'}</p>`) +
+        s.subs.map(x => card(x.text, me && x.i === me.own ? 'mine' : '', '',
+          watch || me.voted || x.i === me.own ? '' : `act('vote',${x.i})`)).join('');
+    else h += s.subs.map(x => card(x.text, x.pts ? 'win' : '',
+      `<small>${esc(x.name)} · ${x.votes} oy${x.pts ? ' · +' + x.pts + ' puan' : ''}</small>`)).join('');
+  }
+  h += '<div class=board>' + P.slice().sort((a, b) => b.score - a.score)
+    .map(p => `<span class="pl ${p.on ? '' : 'off'} ${p.done ? 'done' : ''}">${esc(p.name)} <b>${p.score}</b></span>`).join('') + '</div>';
+  if (role === 'admin') {
+    const lbl = { lobby: 'Başlat', pick: 'Oylamaya geç', vote: 'Sonucu göster', result: 'Sonraki tur' }[s.phase];
+    document.getElementById('btns').innerHTML = (lbl ? `<button onclick="act('next')">${lbl}</button>` : '') +
+      `<button onclick="confirm('Sıfırla?')&&act('restart')">Yeniden başlat</button>`;
+  }
+  $.innerHTML = h;
+}
+if (role === 'admin') // persistent controls: PIN field survives redraws, no prompt() (unsupported in some webviews)
+  document.getElementById('ctl').innerHTML = `<input type=password placeholder="Admin PIN" value="${esc(pin)}" oninput="pin=this.value;sessionStorage.pin=pin"><span id=btns></span>`;
+connect();
+</script>
